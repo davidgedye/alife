@@ -51,11 +51,19 @@ void bf_run(const BFProgram *prog, BFResult *result) {
     }
 
     /* Pass 2: execute */
-    uint8_t ip     = 0;
-    uint8_t dp     = 128;   /* start tape pointer in the middle */
-    uint8_t out_len = 0;
+    uint8_t  ip       = 0;
+    uint8_t  dp       = 128;   /* start tape pointer in the middle */
+    uint8_t  out_len  = 0;
+    uint32_t steps    = 0;
+    uint32_t max_steps = prog->max_steps;
 
     while (ip < prog->len) {
+        if (max_steps && steps >= max_steps) {
+            result->out_len = out_len;
+            result->halted  = 0;   /* timeout */
+            result->steps   = steps;
+            return;
+        }
         switch (prog->src[ip]) {
             case '+': tape[dp]++;  break;
             case '-': tape[dp]--;  break;
@@ -79,10 +87,12 @@ void bf_run(const BFProgram *prog, BFResult *result) {
                 break;
         }
         ip++;
+        steps++;
     }
 
     result->out_len = out_len;
     result->halted  = 1;
+    result->steps   = steps;
 }
 
 /* -------------------------------------------------------------------------
@@ -164,6 +174,7 @@ void bf_run_batch(const BFProgram *programs, BFResult *results, size_t n, int nt
     free(threads);
 }
 
+#ifdef BF_MAIN
 /* -------------------------------------------------------------------------
  * Main: read programs from stdin (text format), run, print results
  *
@@ -207,7 +218,8 @@ int main(int argc, char *argv[]) {
         }
 
         memcpy(programs[count].src, line, len);
-        programs[count].len = (uint8_t)len;
+        programs[count].len       = (uint8_t)len;
+        programs[count].max_steps = 0;   /* unlimited */
         count++;
     }
 
@@ -241,3 +253,4 @@ int main(int argc, char *argv[]) {
     free(results);
     return 0;
 }
+#endif /* BF_MAIN */
