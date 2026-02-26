@@ -85,7 +85,8 @@ void bf_run(const BFProgram *prog, BFResult *result) {
                 if ( tape[dp]) ip = jumps[ip];
                 break;
             default:
-                break;
+                ip++;
+                continue;
         }
         ip++;
         steps++;

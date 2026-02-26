@@ -5,7 +5,7 @@ LDFLAGS = -pthread
 TARGET  = bf
 SRC     = bf.c
 
-.PHONY: all clean test asan experiment
+.PHONY: all clean test asan experiment experiment2
 
 all: $(TARGET)
 
@@ -16,10 +16,13 @@ asan: $(SRC) bf.h
 	$(CC) $(CFLAGS) -DBF_MAIN -fsanitize=address,undefined -g -o $(TARGET)_asan $(SRC) $(LDFLAGS)
 
 experiment: experiment.c bf.c bf.h
-	$(CC) $(CFLAGS) -o $@ experiment.c bf.c $(LDFLAGS)
+	$(CC) $(CFLAGS) -DBF_LONGEST_RUN_TEST -o $@ experiment.c bf.c $(LDFLAGS)
+
+experiment2: experiment2.c bf.c bf.h
+	$(CC) $(CFLAGS) -DBF_LONGEST_RUN_TEST -o $@ experiment2.c bf.c $(LDFLAGS)
 
 clean:
-	rm -f $(TARGET) $(TARGET)_asan experiment
+	rm -f $(TARGET) $(TARGET)_asan experiment experiment2
 
 # Quick smoke test
 test: $(TARGET)

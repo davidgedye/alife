@@ -13,11 +13,9 @@
 #include <ctype.h>
 
 #define N_PROGRAMS     1000000
-#define N_HIST_BUCKETS 7       /* log10 buckets: [1,9]..[1000000,9999999] */
+#define PROG_LEN       64
+#define N_HIST_BUCKETS 6       /* log10 buckets: [1,9]..[100000,999999] */
 #define BAR_WIDTH      50
-
-static const char BF_OPS[] = "+-><.,[]";
-#define N_OPS 8
 
 static int steps_bucket(uint32_t steps) {
     int k = 0;
@@ -36,56 +34,60 @@ int main(void) {
     BFResult  *results  = malloc(N_PROGRAMS * sizeof(BFResult));
     if (!programs || !results) { perror("malloc"); return 1; }
 
-    /* Generate random programs from all 8 BF opcodes */
+    /* Generate random programs: fixed 64 bytes, all 256 byte values equally likely */
     for (int i = 0; i < N_PROGRAMS; i++) {
-        int len = 1 + rand() % BF_MAX_SRC;
-        programs[i].len = (uint8_t)len;
-        for (int j = 0; j < len; j++)
-            programs[i].src[j] = (uint8_t)BF_OPS[rand() % N_OPS];
+        programs[i].len = PROG_LEN;
+        for (int j = 0; j < PROG_LEN; j++)
+            programs[i].src[j] = (uint8_t)(rand() & 0xFF);
     }
 
-    fprintf(stderr, "Running %d programs (max %d steps each)...\n",
-            N_PROGRAMS, BF_MAX_STEPS);
+    fprintf(stderr, "Running %d programs of %d bytes (max %d steps each)...\n",
+            N_PROGRAMS, PROG_LEN, BF_MAX_STEPS);
 
     bf_run_batch(programs, results, N_PROGRAMS, 0);
 
     /* Tally results */
-    size_t   best_idx   = N_PROGRAMS; /* sentinel: none found */
+    size_t   best_idx   = N_PROGRAMS;
     uint32_t best_steps = 0;
     size_t   n_halted   = 0;
     size_t   n_timeout  = 0;
-    size_t   n_err      = 0;
+    size_t   n_zero     = 0;   /* malformed or 0 effective instructions */
     size_t   hist[N_HIST_BUCKETS] = {0};
 
     for (int i = 0; i < N_PROGRAMS; i++) {
-        /* halted=1: normal termination; halted=0 covers both ERR and timeout.
-         * Distinguish: steps==BF_MAX_STEPS means timeout, steps<BF_MAX_STEPS means err. */
         if (results[i].halted) {
-            n_halted++;
-            hist[steps_bucket(results[i].steps)]++;
-            if (results[i].steps > best_steps) {
-                best_steps = results[i].steps;
-                best_idx   = (size_t)i;
+            if (results[i].steps == 0) {
+                n_zero++;
+            } else {
+                n_halted++;
+                hist[steps_bucket(results[i].steps)]++;
+                if (results[i].steps > best_steps) {
+                    best_steps = results[i].steps;
+                    best_idx   = (size_t)i;
+                }
             }
         } else if (results[i].steps > 0) {
             n_timeout++;
         } else {
-            n_err++;
+            n_zero++;   /* malformed (bracket mismatch) */
         }
     }
 
-    fprintf(stderr, "  Halted normally: %zu\n", n_halted);
+    fprintf(stderr, "  Halted normally: %zu\n", n_halted + n_zero);
     fprintf(stderr, "  Timed out:       %zu\n", n_timeout);
-    fprintf(stderr, "  Malformed:       %zu\n", n_err);
+    fprintf(stderr, "  Zero steps:      %zu\n", n_zero);
 
     /* Print histogram */
-    size_t max_count = 1;
+    size_t max_count = n_timeout > n_zero ? n_timeout : n_zero;
     for (int k = 0; k < N_HIST_BUCKETS; k++)
         if (hist[k] > max_count) max_count = hist[k];
+    if (max_count == 0) max_count = 1;
 
-    if (n_timeout > max_count) max_count = n_timeout;
-
-    printf("\n=== Run length histogram (normally halted programs) ===\n");
+    printf("\n=== Run length histogram ===\n");
+    printf("              0 | ");
+    int zero_bar = (int)(n_zero * BAR_WIDTH / max_count);
+    for (int b = 0; b < zero_bar; b++) putchar('#');
+    printf(" %zu\n", n_zero);
     uint32_t lo = 1;
     for (int k = 0; k < N_HIST_BUCKETS; k++) {
         uint32_t hi = lo * 10 - 1;
@@ -110,28 +112,22 @@ int main(void) {
     const BFResult  *wr     = &results[best_idx];
 
     printf("\n=== Winner ===\n");
-    printf("Program (%u bytes): ", winner->len);
+    printf("Program (%u bytes, hex): ", winner->len);
     for (int i = 0; i < winner->len; i++)
-        putchar(winner->src[i]);
+        printf("%02x", winner->src[i]);
+    putchar('\n');
+
+    printf("Program (printable):    ");
+    for (int i = 0; i < winner->len; i++)
+        putchar(isprint(winner->src[i]) ? winner->src[i] : '.');
     putchar('\n');
 
     printf("Steps: %u\n", wr->steps);
 
-    printf("Output: ");
+    printf("Output (%u bytes): ", wr->out_len);
     if (wr->out_len == 0) {
         printf("(none)\n");
     } else {
-        /* Print as ASCII where printable, else hex escape */
-        printf("\"");
-        for (int i = 0; i < wr->out_len; i++) {
-            uint8_t b = wr->out[i];
-            if (isprint(b))
-                putchar(b);
-            else
-                printf("\\x%02x", b);
-        }
-        printf("\"\n");
-        printf("Output bytes (%u): ", wr->out_len);
         for (int i = 0; i < wr->out_len; i++)
             printf("%02x ", wr->out[i]);
         putchar('\n');
