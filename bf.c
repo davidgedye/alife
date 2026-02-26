@@ -60,7 +60,9 @@ void bf_run(const BFProgram *prog, BFResult *result) {
         if (BF_MAX_STEPS && steps >= BF_MAX_STEPS) {
             result->out_len = out_len;
             result->halted  = 0;   /* timeout */
+#ifdef BF_LONGEST_RUN_TEST
             result->steps   = steps;
+#endif
             return;
         }
         switch (prog->src[ip]) {
@@ -91,7 +93,9 @@ void bf_run(const BFProgram *prog, BFResult *result) {
 
     result->out_len = out_len;
     result->halted  = 1;
+#ifdef BF_LONGEST_RUN_TEST
     result->steps   = steps;
+#endif
 }
 
 /* -------------------------------------------------------------------------
