@@ -55,10 +55,9 @@ void bf_run(const BFProgram *prog, BFResult *result) {
     uint8_t  dp       = 128;   /* start tape pointer in the middle */
     uint8_t  out_len  = 0;
     uint32_t steps    = 0;
-    uint32_t max_steps = prog->max_steps;
 
     while (ip < prog->len) {
-        if (max_steps && steps >= max_steps) {
+        if (BF_MAX_STEPS && steps >= BF_MAX_STEPS) {
             result->out_len = out_len;
             result->halted  = 0;   /* timeout */
             result->steps   = steps;
@@ -219,7 +218,6 @@ int main(int argc, char *argv[]) {
 
         memcpy(programs[count].src, line, len);
         programs[count].len       = (uint8_t)len;
-        programs[count].max_steps = 0;   /* unlimited */
         count++;
     }
 
