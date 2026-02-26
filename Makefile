@@ -2,21 +2,24 @@ CC      = gcc
 CFLAGS  = -O3 -march=native -std=c11 -Wall -Wextra -pthread
 LDFLAGS = -pthread
 
-TARGET  = bff
+TARGET  = bf
 SRC     = bf.c
 
-.PHONY: all clean test asan
+.PHONY: all clean test asan experiment
 
 all: $(TARGET)
 
 $(TARGET): $(SRC) bf.h
-	$(CC) $(CFLAGS) -o $@ $(SRC) $(LDFLAGS)
+	$(CC) $(CFLAGS) -DBF_MAIN -o $@ $(SRC) $(LDFLAGS)
 
 asan: $(SRC) bf.h
-	$(CC) $(CFLAGS) -fsanitize=address,undefined -g -o $(TARGET)_asan $(SRC) $(LDFLAGS)
+	$(CC) $(CFLAGS) -DBF_MAIN -fsanitize=address,undefined -g -o $(TARGET)_asan $(SRC) $(LDFLAGS)
+
+experiment: experiment.c bf.c bf.h
+	$(CC) $(CFLAGS) -o $@ experiment.c bf.c $(LDFLAGS)
 
 clean:
-	rm -f $(TARGET) $(TARGET)_asan
+	rm -f $(TARGET) $(TARGET)_asan experiment
 
 # Quick smoke test
 test: $(TARGET)
