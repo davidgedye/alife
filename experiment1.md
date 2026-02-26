@@ -16,12 +16,31 @@ interpreter to find the one that executed the most steps before halting.
 
 | Category | Count |
 |---|---|
-| Halted normally | 41,931 (4.2%) |
-| Timed out (>1M steps) | 5,716 (0.6%) |
-| Malformed (unmatched brackets) | 953,666 (95.4%) |
+| Halted normally | 41,752 (4.2%) |
+| Timed out (>1M steps) | 4,586 (0.5%) |
+| Malformed (unmatched brackets) | 953,662 (95.4%) |
 
 The high malformation rate is expected: `[` and `]` are 2 of 8 opcodes, so ~25% of
 characters are brackets, and random strings are rarely balanced.
+
+### Run length histogram
+
+```
+      1 -       9 | ################################################## 31775
+     10 -      99 | ############## 9192
+    100 -     999 |  350
+   1000 -    9999 |  224
+  10000 -   99999 |  12
+ 100000 -  999999 |  199
+       > 1000000 | ####### 4586
+```
+
+The distribution is strongly bimodal: the vast majority of valid programs halt almost
+immediately (1–9 steps), with a deep valley in the middle and a secondary population of
+long-running programs approaching the 1M step limit. The `100,000–999,999` bucket (199
+programs) being larger than `10,000–99,999` (12 programs) reflects programs that contain
+functional loops capable of running for many iterations before the modular arithmetic of
+the tape forces a halt.
 
 ## Winner
 
