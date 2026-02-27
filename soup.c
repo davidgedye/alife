@@ -90,7 +90,6 @@ static void mutate_soup(double rate) {
 typedef struct {
     uint32_t start;
     uint32_t end;
-    uint64_t rng;
 } WorkerArgs;
 
 static WorkerArgs        worker_args[MAX_THREADS];
@@ -107,7 +106,6 @@ static void *worker_thread(void *arg) {
         pthread_barrier_wait(&barrier_start);
         if (pool_shutdown) break;
 
-        uint64_t rng = a->rng;
         for (uint32_t i = a->start; i < a->end; i++) {
             uint32_t ai = perm[i];
             uint32_t bi = perm[i + NPAIRS];
@@ -115,10 +113,7 @@ static void *worker_thread(void *arg) {
             memcpy(combined,                soup[ai], BFF_HALF_LEN);
             memcpy(combined + BFF_HALF_LEN, soup[bi], BFF_HALF_LEN);
 
-            uint8_t h0 = (uint8_t)(xorshift64(&rng) & (BFF_TAPE_LEN - 1));
-            uint8_t h1 = (uint8_t)(xorshift64(&rng) & (BFF_TAPE_LEN - 1));
-
-            bff_run(combined, h0, h1);
+            bff_run(combined);  /* head positions read from combined[0] and combined[1] */
 
             memcpy(soup[ai], combined,                BFF_HALF_LEN);
             memcpy(soup[bi], combined + BFF_HALF_LEN, BFF_HALF_LEN);
@@ -134,8 +129,6 @@ static void *worker_thread(void *arg) {
  * -------------------------------------------------------------------------*/
 static void soup_epoch(void) {
     shuffle_perm();
-    for (int t = 0; t < g_nthreads; t++)
-        worker_args[t].rng = xorshift64(&global_rng);
     pthread_barrier_wait(&barrier_start);  /* release workers */
     pthread_barrier_wait(&barrier_end);    /* wait for completion */
 }
@@ -180,11 +173,14 @@ int main(int argc, char *argv[]) {
     int      stats_interval = 100;
     double   mutation_rate  = 0.0;
 
-    if (argc >= 2) epochs         = atoi(argv[1]);
-    if (argc >= 3) nthreads       = atoi(argv[2]);
-    if (argc >= 4) seed           = (uint64_t)strtoull(argv[3], NULL, 10);
-    if (argc >= 5) stats_interval = atoi(argv[4]);
-    if (argc >= 6) mutation_rate  = strtod(argv[5], NULL);
+    for (int i = 1; i < argc - 1; i++) {
+        if      (!strcmp(argv[i], "--epochs"))   epochs         = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "--threads"))  nthreads       = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "--seed"))     seed           = (uint64_t)strtoull(argv[++i], NULL, 10);
+        else if (!strcmp(argv[i], "--stats"))    stats_interval = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "--mutation")) mutation_rate  = strtod(argv[++i], NULL);
+        else { fprintf(stderr, "Unknown argument: %s\n", argv[i]); return 1; }
+    }
 
     if (nthreads <= 0) {
         long cpus = sysconf(_SC_NPROCESSORS_ONLN);
@@ -210,7 +206,6 @@ int main(int argc, char *argv[]) {
     for (int t = 0; t < nthreads; t++) {
         worker_args[t].start = (uint32_t)t * chunk;
         worker_args[t].end   = (t == nthreads - 1) ? NPAIRS : worker_args[t].start + chunk;
-        worker_args[t].rng   = 0;
     }
 
     pthread_barrier_init(&barrier_start, NULL, (unsigned)(nthreads + 1));
