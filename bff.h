@@ -6,8 +6,8 @@
 #define BFF_TAPE_LEN    128
 /* Single program length */
 #define BFF_HALF_LEN     64
-/* Step limit per execution: 2^13 */
-#define BFF_MAX_STEPS  8192
+/* Step limit per execution: 2^14 */
+#define BFF_MAX_STEPS  16384
 /* Maximum bracket nesting depth */
 #define BFF_STACK_DEPTH  64
 /* IP starts here; bytes 0-1 are reserved for head positions */
@@ -35,7 +35,7 @@
  *
  * Terminates on: step limit, ']' with empty stack, or stack overflow (depth 64).
  */
-void bff_run(uint8_t tape[BFF_TAPE_LEN]);
+uint32_t bff_run(uint8_t tape[BFF_TAPE_LEN]);
 
 /*
  * Count the number of valid BFF instruction bytes in a BFF_HALF_LEN-byte tape.

@@ -104,13 +104,13 @@ int main(void) {
     check("']' with empty stack terminates (subsequent '+' not reached)", t[H0_POS] == 0);
 
     /* Step limit: '-' at ip=2, head0 fixed at H0_POS.
-     * ip=2 is visited every 128 steps; in 8192 steps that is 64 times.
-     * Starting from 0, 64 decrements give (uint8_t)(0-64) = 192.
-     * Values 192-255 are all non-instructions, so no self-modification fires. */
+     * ip=2 is visited every 128 steps; in 16384 steps that is 128 times.
+     * Starting from 0, 128 decrements give (uint8_t)(0-128) = 128.
+     * Values 128-255 are all non-instructions, so no self-modification fires. */
     make_tape(t, "-");
     bff_run(t);
-    check("step limit: '-' at ip=2 executes 8192/128=64 times, tape[H0_POS]=192",
-          t[H0_POS] == 192);
+    check("step limit: '-' at ip=2 executes 16384/128=128 times, tape[H0_POS]=128",
+          t[H0_POS] == 128);
 
     /* Stack overflow: 64 '[' fill the stack; the 65th '[' overflows and terminates.
      * head0=100 is outside the '[' region so the chain is unbroken.

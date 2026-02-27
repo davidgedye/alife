@@ -8,7 +8,7 @@ static const uint8_t IS_OP[256] = {
     ['[']=1, [']']=1,
 };
 
-void bff_run(uint8_t tape[BFF_TAPE_LEN]) {
+uint32_t bff_run(uint8_t tape[BFF_TAPE_LEN]) {
     uint8_t  ip    = BFF_IP_START;
     uint8_t  head0 = tape[0] & (BFF_TAPE_LEN - 1);  /* read head: explicit control */
     uint8_t  head1 = tape[1] & (BFF_TAPE_LEN - 1);  /* write head: auto-advances  */
@@ -30,12 +30,12 @@ void bff_run(uint8_t tape[BFF_TAPE_LEN]) {
             break;
 
         case '[':
-            if (sp >= BFF_STACK_DEPTH) return;  /* stack overflow: terminate */
+            if (sp >= BFF_STACK_DEPTH) return steps;  /* stack overflow: terminate */
             stack[sp++] = ip;                   /* push unconditionally */
             break;
 
         case ']':
-            if (sp == 0) return;         /* empty stack: terminate */
+            if (sp == 0) return steps;   /* empty stack: terminate */
             if (tape[head0] != 0) {
                 ip = stack[sp - 1];      /* loop: jump to '[' */
             } else {
@@ -49,7 +49,7 @@ void bff_run(uint8_t tape[BFF_TAPE_LEN]) {
 
         ip = (ip + 1) & (BFF_TAPE_LEN - 1);
     }
-    /* Step limit reached: silent termination */
+    return steps;  /* step limit reached */
 }
 
 int bff_count_ops(const uint8_t *half_tape) {

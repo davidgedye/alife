@@ -97,6 +97,7 @@ static pthread_barrier_t barrier_start;
 static pthread_barrier_t barrier_end;
 static volatile int      pool_shutdown = 0;
 static int               g_nthreads    = 0;
+static uint32_t          pair_steps[NPAIRS];  /* run lengths written by workers, read by main */
 
 static void *worker_thread(void *arg) {
     WorkerArgs *a = (WorkerArgs *)arg;
@@ -113,7 +114,7 @@ static void *worker_thread(void *arg) {
             memcpy(combined,                soup[ai], BFF_HALF_LEN);
             memcpy(combined + BFF_HALF_LEN, soup[bi], BFF_HALF_LEN);
 
-            bff_run(combined);  /* head positions read from combined[0] and combined[1] */
+            pair_steps[i] = bff_run(combined);
 
             memcpy(soup[ai], combined,                BFF_HALF_LEN);
             memcpy(soup[bi], combined + BFF_HALF_LEN, BFF_HALF_LEN);
@@ -172,6 +173,7 @@ int main(int argc, char *argv[]) {
     uint64_t seed           = 0;
     int      stats_interval = 100;
     double   mutation_rate  = 0.0;
+    const char *runlog_path = NULL;
 
     for (int i = 1; i < argc - 1; i++) {
         if      (!strcmp(argv[i], "--epochs"))   epochs         = atoi(argv[++i]);
@@ -179,6 +181,7 @@ int main(int argc, char *argv[]) {
         else if (!strcmp(argv[i], "--seed"))     seed           = (uint64_t)strtoull(argv[++i], NULL, 10);
         else if (!strcmp(argv[i], "--stats"))    stats_interval = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--mutation")) mutation_rate  = strtod(argv[++i], NULL);
+        else if (!strcmp(argv[i], "--runlog"))   runlog_path    = argv[++i];
         else { fprintf(stderr, "Unknown argument: %s\n", argv[i]); return 1; }
     }
 
@@ -215,6 +218,15 @@ int main(int argc, char *argv[]) {
     for (int t = 0; t < nthreads; t++)
         pthread_create(&tids[t], NULL, worker_thread, &worker_args[t]);
 
+    /* Open run-length log if requested.
+     * Format: binary stream of uint32_t, NPAIRS values per epoch in order. */
+    FILE *runlog = NULL;
+    if (runlog_path) {
+        runlog = fopen(runlog_path, "wb");
+        if (!runlog) { perror(runlog_path); return 1; }
+        fprintf(stderr, "Run-length log: %s\n", runlog_path);
+    }
+
     /* Run */
     double mean, median;
     printf("%-10s\t%-12s\t%s\n", "epoch", "mean_ops", "median_ops");
@@ -225,12 +237,16 @@ int main(int argc, char *argv[]) {
     for (int epoch = 1; epoch <= epochs; epoch++) {
         soup_epoch();
         mutate_soup(mutation_rate);
+        if (runlog)
+            fwrite(pair_steps, sizeof(uint32_t), NPAIRS, runlog);
         if (epoch % stats_interval == 0) {
             soup_stats(&mean, &median);
             printf("%-10d\t%-12.4f\t%.1f\n", epoch, mean, median);
             fflush(stdout);
         }
     }
+
+    if (runlog) fclose(runlog);
 
     /* Shut down thread pool */
     pool_shutdown = 1;
