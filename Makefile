@@ -5,7 +5,7 @@ LDFLAGS = -pthread
 TARGET  = bf
 SRC     = bf.c
 
-.PHONY: all clean test asan experiment experiment2 soup test_bff
+.PHONY: all clean test asan experiment experiment2 soup soup_orig test_bff
 
 all: $(TARGET)
 
@@ -23,6 +23,9 @@ experiment2: experiment2.c bf.c bf.h
 
 soup: soup.c bff.c bff.h
 	$(CC) $(CFLAGS) -o $@ soup.c bff.c $(LDFLAGS) -lm
+
+soup_orig: soup_orig.c bff_orig.c bff_orig.h
+	$(CC) $(CFLAGS) -o $@ soup_orig.c bff_orig.c $(LDFLAGS) -lm
 
 test_bff: test_bff.c bff.c bff.h
 	$(CC) $(CFLAGS) -o $@ test_bff.c bff.c $(LDFLAGS)
