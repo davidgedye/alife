@@ -40,7 +40,7 @@ int main(void) {
     make_tape(t, ",]");
     t[H0_POS] = MAKE_TOKEN(0, 0, 42);
     bff_run(t);
-    check("head1 initialised from tape[1]: ',' writes tape[head0] to tape[H1_POS]",
+    check("head1 initialised from tape[1]: ',' reads tape[H0_POS] and writes to tape[H1_POS]",
           TOKEN_CHAR(t[H1_POS]) == 42);
 
     /* IP starts at BFF_IP_START=2 (bytes 0-1 not executed as code) */
@@ -103,14 +103,17 @@ int main(void) {
     bff_run(t);
     check("']' with empty stack terminates (subsequent '+' not reached)", TOKEN_CHAR(t[H0_POS]) == 0);
 
-    /* Step limit: '-' at ip=2, head0 fixed at H0_POS.
-     * ip=2 is visited every 128 steps; in 16384 steps that is 128 times.
-     * Starting from 0, 128 decrements give (uint8_t)(0-128) = 128.
-     * Values 128-255 are all non-instructions, so no self-modification fires. */
-    make_tape(t, "-");
+    /* End-of-tape termination: IP runs from BFF_IP_START (2) to 127 and then stops.
+     * Fill positions 2-127 with '+' (126 instructions); tape[H0_POS] should be 126. */
+    /* head0 = 0 (points to tape[0], outside the IP range 2-127, so no collision).
+     * Fill positions 2-127 with '+': 126 instructions, each incrementing tape[0]. */
+    for (int i = 0; i < BFF_TAPE_LEN; i++) t[i] = MAKE_TOKEN(0, 0, 0);
+    t[1] = MAKE_TOKEN(0, 0, H1_POS);
+    for (int i = BFF_IP_START; i < BFF_TAPE_LEN; i++)
+        t[i] = MAKE_TOKEN(0, 0, '+');
     bff_run(t);
-    check("step limit: '-' at ip=2 executes 16384/128=128 times, tape[H0_POS]=128",
-          TOKEN_CHAR(t[H0_POS]) == 128);
+    check("end-of-tape terminates: 126 '+' instructions at positions 2-127 all execute",
+          TOKEN_CHAR(t[0]) == 126);
 
     /* Stack overflow: 64 '[' fill the stack; the 65th '[' overflows and terminates.
      * head0=100 is outside the '[' region so the chain is unbroken.
@@ -134,11 +137,11 @@ int main(void) {
 
     /* '[' pushes unconditionally even when tape[head0]==0.
      * '[,]]' with tape[H0_POS]=0 and tape[H1_POS]=99:
-     *   '[' pushes (head1 stays at H1_POS); ',' writes tape[H0_POS]=0 to tape[H1_POS];
-     *   head1→H1_POS+1; ']' pops; ']' terminates → tape[H1_POS] = 0 (body ran, overwrote 99).
-     *   If '[' had skipped the body, ',' would never run and tape[H1_POS] would stay 99. */
+     *   '[' pushes; ',' writes tape[H0_POS]=0 to tape[H1_POS]; head1→H1_POS+1;
+     *   ']' sees tape[H0_POS]=0, pops; ']' terminates → tape[H1_POS]=0 (body ran, overwrote 99).
+     *   If '[' had skipped the body, tape[H1_POS] would stay 99. */
     make_tape(t, "[,]]");
-    t[H1_POS] = MAKE_TOKEN(0, 0, 99);  /* head1 starts here; ',' writes to H1_POS */
+    t[H1_POS] = MAKE_TOKEN(0, 0, 99);
     bff_run(t);
     check("'[' pushes unconditionally: body runs and overwrites tape[H1_POS]",
           TOKEN_CHAR(t[H1_POS]) == 0);
@@ -176,7 +179,7 @@ int main(void) {
     check("'-' preserves TOKEN_ID",
           TOKEN_ID(t[H0_POS]) == 77 && TOKEN_CHAR(t[H0_POS]) == 4);
 
-    /* ',' copies the full token (id + epoch + char) */
+    /* ',' copies the full token (id + epoch + char) from tape[head0] to tape[head1] */
     make_tape(t, ",]");
     t[H0_POS] = MAKE_TOKEN(42, 3, 77);
     bff_run(t);

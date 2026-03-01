@@ -45,7 +45,7 @@
  *   ']'  if BFFO_TOKEN_CHAR(tape[head0])!=0: jump to stack top; else pop;
  *        empty stack: terminate
  *
- * Terminates on: step limit, ']' with empty stack, or stack overflow.
+ * Terminates on: step limit, IP advancing past position 127, ']' with empty stack, or stack overflow.
  * Returns the number of steps executed.
  */
 uint32_t bffo_run(uint64_t tape[BFFO_TAPE_LEN], uint8_t head0, uint8_t head1);

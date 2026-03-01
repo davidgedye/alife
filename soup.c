@@ -137,6 +137,40 @@ static void *worker_thread(void *arg) {
 }
 
 /* -------------------------------------------------------------------------
+ * Trace: save epoch snapshots to disk for post-hoc analysis.
+ *
+ * Each epoch E writes:
+ *   epochE_soup.bin  — SOUP_SIZE × BFF_HALF_LEN uint64 (row-major, 64 MB)
+ *   epochE_perm.bin  — SOUP_SIZE uint32 (pair i = perm[i] paired with perm[i+NPAIRS])
+ *   epochE_steps.bin — NPAIRS uint32 (bff_run step count per pair)
+ * Epoch 0 only has epochE_soup.bin (initial state, no pairs yet).
+ * -------------------------------------------------------------------------*/
+static void save_trace_epoch(const char *dir, int epoch, int with_pairs) {
+    char path[512];
+    FILE *f;
+
+    snprintf(path, sizeof(path), "%s/epoch%d_soup.bin", dir, epoch);
+    f = fopen(path, "wb");
+    if (!f) { perror(path); return; }
+    fwrite(soup, sizeof(uint64_t), (size_t)SOUP_SIZE * BFF_HALF_LEN, f);
+    fclose(f);
+
+    if (!with_pairs) return;
+
+    snprintf(path, sizeof(path), "%s/epoch%d_perm.bin", dir, epoch);
+    f = fopen(path, "wb");
+    if (!f) { perror(path); return; }
+    fwrite(perm, sizeof(uint32_t), SOUP_SIZE, f);
+    fclose(f);
+
+    snprintf(path, sizeof(path), "%s/epoch%d_steps.bin", dir, epoch);
+    f = fopen(path, "wb");
+    if (!f) { perror(path); return; }
+    fwrite(pair_steps, sizeof(uint32_t), NPAIRS, f);
+    fclose(f);
+}
+
+/* -------------------------------------------------------------------------
  * Run one epoch: shuffle, seed workers, sync
  * -------------------------------------------------------------------------*/
 static void soup_epoch(void) {
@@ -247,14 +281,16 @@ int main(int argc, char *argv[]) {
     int      stats_interval = 100;
     double   mutation_rate  = 0.0;
     const char *runlog_path = NULL;
+    const char *trace_dir   = NULL;
 
     for (int i = 1; i < argc - 1; i++) {
-        if      (!strcmp(argv[i], "--epochs"))   epochs         = atoi(argv[++i]);
-        else if (!strcmp(argv[i], "--threads"))  nthreads       = atoi(argv[++i]);
-        else if (!strcmp(argv[i], "--seed"))     seed           = (uint64_t)strtoull(argv[++i], NULL, 10);
-        else if (!strcmp(argv[i], "--stats"))    stats_interval = atoi(argv[++i]);
-        else if (!strcmp(argv[i], "--mutation")) mutation_rate  = strtod(argv[++i], NULL);
-        else if (!strcmp(argv[i], "--runlog"))   runlog_path    = argv[++i];
+        if      (!strcmp(argv[i], "--epochs"))    epochs         = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "--threads"))   nthreads       = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "--seed"))      seed           = (uint64_t)strtoull(argv[++i], NULL, 10);
+        else if (!strcmp(argv[i], "--stats"))     stats_interval = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "--mutation"))  mutation_rate  = strtod(argv[++i], NULL);
+        else if (!strcmp(argv[i], "--runlog"))    runlog_path    = argv[++i];
+        else if (!strcmp(argv[i], "--trace-dir")) trace_dir      = argv[++i];
         else { fprintf(stderr, "Unknown argument: %s\n", argv[i]); return 1; }
     }
 
@@ -277,6 +313,22 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "BFF soup: %d tapes x %d bytes, %d epochs, %d threads, stats every %d, mutation rate %.2g\n",
             SOUP_SIZE, BFF_HALF_LEN, epochs, nthreads, stats_interval, mutation_rate);
     fprintf(stderr, "Seed: %llu\n", (unsigned long long)global_rng);
+
+    /* Write trace metadata and epoch-0 snapshot if requested */
+    if (trace_dir) {
+        char path[512];
+        snprintf(path, sizeof(path), "%s/metadata.txt", trace_dir);
+        FILE *mf = fopen(path, "w");
+        if (mf) {
+            fprintf(mf, "soup_size=%d\nhalf_len=%d\nnpairs=%d\n"
+                        "seed=%llu\nepochs=%d\nmutation_rate=%g\n",
+                    SOUP_SIZE, BFF_HALF_LEN, NPAIRS,
+                    (unsigned long long)global_rng, epochs, mutation_rate);
+            fclose(mf);
+        }
+        save_trace_epoch(trace_dir, 0, 0);
+        fprintf(stderr, "Trace: saved epoch 0 soup → %s\n", trace_dir);
+    }
 
     /* Set up thread pool */
     g_nthreads = nthreads;
@@ -318,6 +370,10 @@ int main(int argc, char *argv[]) {
         mutate_soup(mutation_rate, epoch);
         if (runlog)
             fwrite(pair_steps, sizeof(uint32_t), NPAIRS, runlog);
+        if (trace_dir) {
+            save_trace_epoch(trace_dir, epoch, 1);
+            fprintf(stderr, "Trace: saved epoch %d\n", epoch);
+        }
         if (epoch % stats_interval == 0) {
             soup_stats(&mean, &median, &unique, &modal_id, &modal_count, rep_str);
             printf("%-10d\t%-12.4f\t%-12.1f\t%-12u\t%-10u\t|%s| (%u)\n",

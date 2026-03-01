@@ -289,12 +289,12 @@ int main(int argc, char *argv[]) {
     double mean, median;
     uint32_t unique, modal_id, modal_count;
     char rep_str[BFFO_HALF_LEN + 1];
-    printf("%-10s\t%-12s\t%-12s\t%-12s\t%-10s\t%s\n",
-           "epoch", "mean_ops", "median_ops", "unique_ids", "modal_id",
-           "representative_tape (modal_count)");
+    printf("%-10s\t%-12s\t%-12s\t%-12s\t%-12s\t%-12s\t%-10s\t%s\n",
+           "epoch", "mean_ops", "median_ops", "mean_steps", "max_steps",
+           "unique_ids", "modal_id", "representative_tape (modal_count)");
     soup_stats(&mean, &median, &unique, &modal_id, &modal_count, rep_str);
-    printf("%-10d\t%-12.4f\t%-12.1f\t%-12u\t%-10u\t|%s| (%u)\n",
-           0, mean, median, unique, modal_id, rep_str, modal_count);
+    printf("%-10d\t%-12.4f\t%-12.1f\t%-12.1f\t%-12u\t%-12u\t%-10u\t|%s| (%u)\n",
+           0, mean, median, 0.0, 0u, unique, modal_id, rep_str, modal_count);
     fflush(stdout);
 
     for (int epoch = 1; epoch <= epochs; epoch++) {
@@ -303,9 +303,17 @@ int main(int argc, char *argv[]) {
         if (runlog)
             fwrite(pair_steps, sizeof(uint32_t), NPAIRS, runlog);
         if (epoch % stats_interval == 0) {
+            double step_sum = 0.0;
+            uint32_t step_max = 0;
+            for (uint32_t i = 0; i < NPAIRS; i++) {
+                step_sum += pair_steps[i];
+                if (pair_steps[i] > step_max) step_max = pair_steps[i];
+            }
+            double mean_steps = step_sum / NPAIRS;
             soup_stats(&mean, &median, &unique, &modal_id, &modal_count, rep_str);
-            printf("%-10d\t%-12.4f\t%-12.1f\t%-12u\t%-10u\t|%s| (%u)\n",
-                   epoch, mean, median, unique, modal_id, rep_str, modal_count);
+            printf("%-10d\t%-12.4f\t%-12.1f\t%-12.1f\t%-12u\t%-12u\t%-10u\t|%s| (%u)\n",
+                   epoch, mean, median, mean_steps, step_max,
+                   unique, modal_id, rep_str, modal_count);
             fflush(stdout);
         }
     }

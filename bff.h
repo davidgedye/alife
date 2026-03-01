@@ -54,7 +54,8 @@
  *   '['  push IP to stack (unconditionally)
  *   ']'  if TOKEN_CHAR(tape[head0])!=0: jump to stack top; else pop; empty stack: terminate
  *
- * Terminates on: step limit, ']' with empty stack, or stack overflow (depth 64).
+ * Terminates on: step limit, IP advancing past position 127, ']' with empty stack,
+ * or stack overflow (depth 64).
  */
 uint32_t bff_run(uint64_t tape[BFF_TAPE_LEN]);
 

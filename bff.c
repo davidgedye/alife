@@ -47,7 +47,8 @@ uint32_t bff_run(uint64_t tape[BFF_TAPE_LEN]) {
             break;
         }
 
-        ip = (ip + 1) & (BFF_TAPE_LEN - 1);
+        if (ip + 1 >= BFF_TAPE_LEN) return steps;  /* ran off end of tape: terminate */
+        ip++;
     }
     return steps;  /* step limit reached */
 }

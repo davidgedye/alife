@@ -44,7 +44,8 @@ uint32_t bffo_run(uint64_t tape[BFFO_TAPE_LEN], uint8_t head0, uint8_t head1) {
             break;
         }
 
-        ip = (ip + 1) & (BFFO_TAPE_LEN - 1);
+        if (ip + 1 >= BFFO_TAPE_LEN) return steps;
+        ip++;
     }
     return steps;  /* step limit reached */
 }
